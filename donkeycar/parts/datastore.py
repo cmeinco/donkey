@@ -200,7 +200,7 @@ class Tub(object):
     def get_index(self, shuffled=True):
         files = next(os.walk(self.path))[2]
         record_files = [f for f in files if f[:6]=='record']
-
+        
         def get_file_ix(file_name):
             try:
                 name = file_name.split('.')[0]
