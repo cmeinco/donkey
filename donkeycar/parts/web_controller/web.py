@@ -7,7 +7,7 @@ Created on Sat Jun 24 20:10:44 2017
 
 remotes.py
 
-The client and web server needed to control a car remotely. 
+The client and web server needed to control a car remotely.
 """
 
 
@@ -27,9 +27,9 @@ from ... import utils
 class RemoteWebServer():
     '''
     A controller that repeatedly polls a remote webserver and expects
-    the response to be angle, throttle and drive mode. 
+    the response to be angle, throttle and drive mode.
     '''
-    
+
     def __init__(self, remote_url, connection_timeout=.25):
 
         self.control_url = remote_url
@@ -42,11 +42,11 @@ class RemoteWebServer():
         self.session = requests.Session()
 
 
-        
+
     def update(self):
         '''
-        Loop to run in separate thread the updates angle, throttle and 
-        drive mode. 
+        Loop to run in separate thread the updates angle, throttle and
+        drive mode.
         '''
 
         while True:
@@ -55,39 +55,39 @@ class RemoteWebServer():
 
 
     def run_threaded(self):
-        ''' 
+        '''
         Return the last state given from the remote server.
         '''
-        
+
         #return last returned last remote response.
         return self.angle, self.throttle, self.mode, self.recording
 
-        
+
     def run(self):
         '''
         Posts current car sensor data to webserver and returns
-        angle and throttle recommendations. 
+        angle and throttle recommendations.
         '''
-        
+
         data = {}
         response = None
         while response == None:
             try:
-                response = self.session.post(self.control_url, 
+                response = self.session.post(self.control_url,
                                              files={'json': json.dumps(data)},
                                              timeout=0.25)
-                
+
             except (requests.exceptions.ReadTimeout) as err:
                 print("\n Request took too long. Retrying")
                 #Lower throttle to prevent runaways.
                 return self.angle, self.throttle * .8, None
-                
+
             except (requests.ConnectionError) as err:
                 #try to reconnect every 3 seconds
-                print("\n Vehicle could not connect to server. Make sure you've " + 
+                print("\n Vehicle could not connect to server. Make sure you've " +
                     "started your server and you're referencing the right port.")
                 time.sleep(3)
-            
+
 
 
         data = json.loads(response.text)
@@ -95,15 +95,15 @@ class RemoteWebServer():
         throttle = float(data['throttle'])
         drive_mode = str(data['drive_mode'])
         recording = bool(data['recording'])
-        
+
         return angle, throttle, drive_mode, recording
-    
-    
+
+
 class LocalWebController(tornado.web.Application):
 
     def __init__(self):
-        ''' 
-        Create and publish variables needed on many of 
+        '''
+        Create and publish variables needed on many of
         the web handlers.
         '''
 
@@ -111,7 +111,7 @@ class LocalWebController(tornado.web.Application):
 
         this_dir = os.path.dirname(os.path.realpath(__file__))
         self.static_file_path = os.path.join(this_dir, 'templates', 'static')
-        
+
         self.angle = 0.0
         self.throttle = 0.0
         self.mode = 'user'
@@ -139,10 +139,39 @@ class LocalWebController(tornado.web.Application):
     def run_threaded(self, img_arr=None):
         self.img_arr = img_arr
         return self.angle, self.throttle, self.mode, self.recording
-        
+
     def run(self, img_arr=None):
         self.img_arr = img_arr
         return self.angle, self.throttle, self.mode, self.recording
+
+
+class LocalWebBroadcastController(LocalWebController):
+
+    def __init__(self):
+        '''
+        Only provides video broadcast for use with joystick startup.
+        '''
+
+        print('Starting Donkey Video Broadcast...')
+
+        this_dir = os.path.dirname(os.path.realpath(__file__))
+        self.static_file_path = os.path.join(this_dir, 'templates', 'static')
+
+        self.angle = 0.0
+        self.throttle = 0.0
+        self.mode = 'user'
+        self.recording = False
+
+        handlers = [
+            (r"/", tornado.web.RedirectHandler, dict(url="/video")),
+            (r"/video",VideoAPI),
+            (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": self.static_file_path}),
+            ]
+
+        settings = {'debug': True}
+
+        super().__init__(handlers, **settings)
+
 
 
 class DriveAPI(tornado.web.RequestHandler):
@@ -150,8 +179,8 @@ class DriveAPI(tornado.web.RequestHandler):
     def get(self):
         data = {}
         self.render("templates/vehicle.html", **data)
-    
-    
+
+
     def post(self):
         '''
         Receive post requests as user changes the angle
@@ -166,7 +195,7 @@ class DriveAPI(tornado.web.RequestHandler):
 
 class VideoAPI(tornado.web.RequestHandler):
     '''
-    Serves a MJPEG of the images posted from the vehicle. 
+    Serves a MJPEG of the images posted from the vehicle.
     '''
     @tornado.web.asynchronous
     @tornado.gen.coroutine
@@ -178,7 +207,7 @@ class VideoAPI(tornado.web.RequestHandler):
         self.served_image_timestamp = time.time()
         my_boundary = "--boundarydonotcross"
         while True:
-            
+
             interval = .1
             if self.served_image_timestamp + interval < time.time():
 
@@ -187,7 +216,7 @@ class VideoAPI(tornado.web.RequestHandler):
 
                 self.write(my_boundary)
                 self.write("Content-type: image/jpeg\r\n")
-                self.write("Content-length: %s\r\n\r\n" % len(img)) 
+                self.write("Content-length: %s\r\n\r\n" % len(img))
                 self.write(img)
                 self.served_image_timestamp = time.time()
                 yield tornado.gen.Task(self.flush)
